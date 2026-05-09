@@ -1,0 +1,125 @@
+# =============================================================================
+#  HR Estimation from NIR Facial Video — Master Configuration
+#  MR-NIRP-D Dataset  |  PhysFormer-NIR Architecture
+#
+#  CONFIRMED DATASET STRUCTURE (docs-ingest-bucket):
+#    gs://docs-ingest-bucket/
+#      subject14_garage_still_975/
+#        NIR/                              <-- PGM frames here
+#          000000.pgm … NNNNNN.pgm
+#        PulseOX_subject14_garage_still_975/
+#          PulseOX/
+#            pulseOx.mat
+#            cam0_full_log.txt
+#      subject15_garage_small_motion_940/
+#      subject18_garage_still_975/
+#      subject7_garage_small_motion_940/
+#
+#  4 SUBJECTS TOTAL: 7, 14, 15, 18
+#  SPLIT (subject-independent, no leakage):
+#    train: [7, 14]   val: [15]   test: [18]
+# =============================================================================
+
+gcs:
+  project_id: "project_id"       # <-- ALREADY SET BY USER
+  bucket_name: "bucket_name"
+  raw_prefix: ""                           # subjects at bucket root
+  processed_prefix: "processed_hdf5"
+  local_cache_dir: "/home/manu/NIR_data"
+
+dataset:
+  modality: "NIR"
+  input_format: "pgm"
+  fps: 30.0
+  clip_length_sec: 10
+  clip_length_frames: 300                  # 10s × 30fps
+  overlap_ratio: 0.5
+
+  face_roi_size: 128
+
+  # EXPLICIT subject IDs (confirmed from bucket listing)
+  all_subjects: [7, 14, 15, 18]
+  train_subjects: [7, 14]                  # 2 subjects --> train
+  val_subjects: [15]                       # 1 subject  --> val
+  test_subjects: [18]                      # 1 subject  --> test
+  subject_split_ratio: [0.5, 0.25, 0.25]  # used only if all_subjects=auto
+
+  hr_range_bpm: [45, 180]
+  gt_signal_type: "bvp"
+
+preprocessing:
+  face_detector: "haar"                    # mediapipe 0.10+ incompatible --> Haar OK
+  face_conf_threshold: 0.4
+
+  # Dark frame handling — SESSION-LEVEL linear stretch (not per-frame CLAHE)
+  # Per-frame CLAHE destroys BVP temporal signal (Pearson drops to 0.097)
+  # Session-level stretch preserves it (Pearson = 0.982)
+  dark_frame_threshold: 0.04
+  dead_frame_threshold: 0.01
+  dark_enhancement: "session_stretch"
+
+  normalize_method: "percentile_clip"
+  percentile_lo: 1.0
+  percentile_hi: 99.0
+
+  min_valid_frame_ratio: 0.4               # keep clips with ≥40% non-dead frames
+  store_quality_score: true
+
+  gt_bandpass_low: 0.75                    # Hz = 45 BPM
+  gt_bandpass_high: 3.0                    # Hz = 180 BPM
+
+model:
+  name: "PhysFormerNIR"
+  in_channels: 1
+  use_temporal_diff_channel: true          # --> 2 channels at runtime
+
+  stem_channels: [32, 64]
+  tdc_blocks: 4
+  tdc_channels: [64, 128, 128, 256]
+  tdc_theta: 0.7
+
+  transformer_depth: 4
+  transformer_heads: 8
+  transformer_dim: 256
+  transformer_ff_dim: 512
+  transformer_dropout: 0.1
+
+training:
+  epochs: 80
+  batch_size: 4                            # T4 16 GB — safe starting point
+  gradient_accumulation_steps: 4          # effective batch = 16
+  learning_rate: 5.0e-5
+  lr_scheduler: "cosine_restarts"
+  warmup_epochs: 5
+  weight_decay: 1.0e-4
+  clip_grad_norm: 5.0
+
+  use_quality_weighting: true
+  dark_clip_loss_weight: 0.3               # dark clips weighted 30%
+
+  loss:
+    pearson_weight: 1.0
+    freq_weight: 0.5
+    snr_weight: 0.2
+
+  mixed_precision: true                    # FP16 on T4
+  num_workers: 4
+  pin_memory: true
+  seed: 42
+  checkpoint_dir: "checkpoints"
+  log_every_n_steps: 10
+  val_every_n_epochs: 2
+
+evaluation:
+  window_sec: 10
+  overlap_ratio: 0.75
+  fft_method: "welch"
+  peak_pick: "parabolic"
+  report_by_quality: true
+  metrics: ["MAE", "RMSE", "MAPE", "pearson_r", "SNR"]
+
+wandb:
+  project: "hr-nir-estimation"
+  entity: null
+  tags: ["NIR", "rPPG", "MR-NIRP-D", "PhysFormer", "T4"]
+  log_signal_plots: true
