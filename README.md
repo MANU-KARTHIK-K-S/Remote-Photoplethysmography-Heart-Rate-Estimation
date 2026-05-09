@@ -1,13 +1,15 @@
-# Heart Rate Estimation from NIR Facial Video
+# Heart Rate Estimation from NIR Facial Video Sequence
 ## MR-NIRP-D Dataset · PhysFormer-NIR Architecture
 
 ---
 
 ## Overview
 
-End-to-end pipeline for estimating Heart Rate (BPM) from monocular Near-Infrared (NIR) facial video using the MR-NIRP-D dataset. Uses only the NIR modality (no RGB, depth, or thermal).
+End-to-end pipeline for estimating Heart Rate (BPM) from monocular Near-Infrared (NIR) facial video sequences using the MR-NIRP-D dataset. Uses only the NIR modality (no RGB, depth, or thermal).
 
 **Architecture:** PhysFormer-NIR — a 3-D CNN with Temporal Difference Convolution blocks feeding a 4-layer Temporal Transformer. Predicts a per-frame rPPG waveform; BPM is extracted via Welch PSD with parabolic interpolation.
+
+Final Report: [PhysFormer_NIR_Final_Submission.pdf](Reports/PhysFormer_NIR_Final_Submission.pdf)
 
 ---
 
@@ -306,4 +308,3 @@ Results broken down by: dark vs normal clips, per-subject, overall.
 4. Hu S. et al. **MR-NIRP Dataset** — Rice CIL 2019. Dataset description.
 5. de Haan G. & Jeanne V. — IEEE T-BME 2013. BVP bandpass methodology.
 6. Poh M-Z et al. — Optics Express 2010. FFT-based HR estimation from rPPG.
-
