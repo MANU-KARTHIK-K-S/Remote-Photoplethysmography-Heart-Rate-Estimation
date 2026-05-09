@@ -83,8 +83,66 @@ hr_nir_estimation/
 ```
 
 ---
+## Quick Start without Make
 
-## Quick Start
+```bash
+
+# Set your project ID:
+sed -i 's/your-gcp-project-id/YOUR-REAL-PROJECT-ID/' /configs/config.yaml
+
+
+# ── Verify auth works (takes 2 seconds) ──────────────────────────
+python3 -c "
+from google.cloud import storage
+c = storage.Client()
+b = c.bucket('bucket')
+print('Auth OK — bucket accessible:', b.exists())
+"
+# Expected: Auth OK — bucket accessible: True
+
+# ── Inspect GT files you already downloaded ───────────────────────
+python scripts/inspect_mat.py \
+    --mat /tmp/pulseOx.mat \
+    --log /tmp/cam0_full_log.txt
+# Check: Sample rate ~125 Hz, HR ref ~45-180 BPM, timestamps = absolute
+
+# ── Preprocess ONE subject first (~10 min on T4) ──────────────────
+python scripts/preprocess_dataset.py \
+    --config configs/config.yaml \
+    --subjects 14 \
+    --no-upload
+
+# Look for in the output:
+#   ✓ Subject 14 | garage_still_975 | NNNN PGMs
+#   → X clips (mode=normal or dim, hr_ref=ZZ.Z BPM)
+# If hr_ref shows "—" that is fine (waveform GT still works)
+
+# ── Full preprocessing all 4 subjects (~40 min) ───────────────────
+python scripts/preprocess_dataset.py --config configs/config.yaml
+
+# ── Train ─────────────────────────────────────────────────────────
+# Quick 2-epoch sanity check first:
+python scripts/train.py training.epochs=2 training.val_every_n_epochs=1
+
+# ── Custom input ─────────────────────────────────────────────────────────
+export WANDB_MODE=disabled
+python scripts/train.py --config configs/config.yaml \
+    dataset.local_cache_dir="<path>" \
+    dataset.num_workers=2 \
+    training.epochs=60 \
+    training.val_every_n_epochs=5
+python scripts/train.py training.epochs=2 training.val_every_n_epochs=1
+
+# Full training (monitor with: watch -n5 nvidia-smi):
+python scripts/train.py --config configs/config.yaml
+
+# ── Evaluate ──────────────────────────────────────────────────────
+python scripts/evaluate.py \
+    --config configs/config.yaml \
+    --checkpoint checkpoints/physformer_nir_best.pth \
+    --split test
+```
+## Quick Start with Make
 
 ```bash
 # 1. Install
